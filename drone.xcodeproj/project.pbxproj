@@ -10,9 +10,22 @@
 		9219BF492E6A3850000F0707 /* drone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = drone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		92E769BC2E7BDD47006AEADC /* Exceptions for "drone" folder in "drone" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9219BF482E6A3850000F0707 /* drone */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9219BF4B2E6A3850000F0707 /* drone */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				92E769BC2E7BDD47006AEADC /* Exceptions for "drone" folder in "drone" target */,
+			);
 			path = drone;
 			sourceTree = "<group>";
 		};
@@ -257,7 +270,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = drone/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to find local services";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -284,7 +299,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = drone/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to find local services";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
