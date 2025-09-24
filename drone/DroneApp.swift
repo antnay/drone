@@ -20,4 +20,3 @@ struct droneApp: App {
         .defaultSize(width: 200, height: 200)
     }
 }
-
