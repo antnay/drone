@@ -77,17 +77,117 @@ struct ArtistsResponse: Codable {
 
 struct ArtistIndex: Codable {
     let name: String
-    let artist: [Artist]
+    let artist: [ArtistInfo]
 }
 
-struct GenresResponse: Codable {
-    let index: [Genre]
+struct AlbumList: Codable {
+    let album: [AlbumListResponse]
+
+    var count: Int {
+        return album.count
+    }
+
+    var isEmpty: Bool {
+        return album.isEmpty
+    }
+}
+
+struct AlbumListResponse: Codable, Identifiable {
+    let id: String
+    let parent: String?
+    let isDir: Bool?
+    let title: String?
+    let name: String
+    let album: String?
+    let artist: String
+    let year: Int?
+    let genre: String?
+    let coverArt: String?
+    let duration: Int?
+    let created: String?
+    let artistId: String?
+    let songCount: Int?
+    let isVideo: Bool?
+    let bpm: Int?
+    let comment: String?
+    let sortName: String?
+    let mediaType: String?
+    let musicBrainzId: String?
+    let isrc: [String]?
+    let genres: [Genre]?
+    let replayGain: ReplayGain?
+    let channelCount: Int?
+    let samplingRate: Int?
+    let bitDepth: Int?
+    let moods: [String]?
+    let artists: [ArtistInfo]?
+    let displayArtist: String?
+    let albumArtists: [ArtistInfo]?
+    let displayAlbumArtist: String?
+    let contributors: [String]?
+    let displayComposer: String?
+    let explicitStatus: String?
+
+    var createdDate: Date? {
+        guard let created = created else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [
+            .withInternetDateTime, .withFractionalSeconds,
+        ]
+        return formatter.date(from: created)
+    }
+
+    var formattedDuration: String {
+        guard let duration = duration else { return "0:00" }
+        let minutes = duration / 60
+        let seconds = duration % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
 }
 
 struct Genre: Codable {
-    let value: String
-    let songCount: Int
-    let albumCount: Int
+    let name: String
+}
+
+struct GenresResponse: Codable {
+    let genre: [Genre]
+}
+
+struct SongsResponse: Codable {
+    let song: [SongResponse]
+}
+
+struct SongResponse: Codable, Identifiable {
+    let id: String
+    let parent: String?
+    let title: String
+    let album: String?
+    let artist: String
+    let isDir: Bool
+    let coverArt: String?
+    let created: String?
+    let duration: Int?
+    let bitRate: Int?
+    let track: Int?
+    let year: Int?
+    let genre: String?
+    let size: Int?
+    let suffix: String?
+    let contentType: String?
+    let isVideo: Bool?
+    let path: String?
+    let albumId: String?
+    let artistId: String?
+    let type: String?
+    let discNumber: Int?
+}
+
+struct ReplayGain: Codable {
+}
+
+struct ArtistInfo: Codable, Identifiable {
+    let id: String
+    let name: String
 }
 
 struct ScanStatus: Codable {
@@ -98,3 +198,4 @@ struct ScanStatus: Codable {
     let scanType: String
     let elapsedTime: Int
 }
+
