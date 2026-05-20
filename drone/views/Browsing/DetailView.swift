@@ -19,10 +19,10 @@ struct DetailView: View {
                 ArtistsView()
             case .songs:
                 SongsView()
-            case .playlists:
-                PlaylistsView()
-            case .genres:
-                GenresView()
+//            case .playlists:
+//                PlaylistsView()
+//            case .genres:
+//                GenresView()
             case .recentlyAdded:
                 RecentlyAddedView()
             }

@@ -10,8 +10,6 @@ import Foundation
 import SwiftData
 import os
 
-
-
 @Model
 final class Server: ObservableObject {
     var baseURL: String
@@ -21,10 +19,10 @@ final class Server: ObservableObject {
     var provider: String
     var status: String
     var lastScan: TimeInterval
-    
+
     @Attribute(.ephemeral) var isLoading: Bool = false
 
-    private static let logger = Logger()
+    static let logger = Logger()
     private final var version = "1.16.1"
     private final var client = "Drone"
     private final var format = "json"
@@ -65,7 +63,8 @@ final class Server: ObservableObject {
     }
 
     private func salter() -> String {
-        let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        let letters =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         return String((0..<15).map { _ in letters.randomElement()! })
     }
 
@@ -78,7 +77,12 @@ final class Server: ObservableObject {
         return hash
     }
 
-    func updateConnection(url: String, username: String, password: String, name: String) {
+    func updateConnection(
+        url: String,
+        username: String,
+        password: String,
+        name: String
+    ) {
         self.baseURL = Server.validateURL(url: url)
         self.username = username
         self.password = password
@@ -86,13 +90,16 @@ final class Server: ObservableObject {
     }
 
     // Generic API call helper
-    private func apiCall<T: Codable>(endpoint: String, params: [URLQueryItem] = []) async throws -> T? {
+    private func apiCall<T: Codable>(
+        endpoint: String,
+        params: [URLQueryItem] = []
+    ) async throws -> T? {
         let salt = salter()
         let token = md5(from: "\(password)\(salt)")
-        
+
         var components = URLComponents(string: baseURL)
         components?.path = "/rest/\(endpoint)"
-        
+
         var queryItems = [
             URLQueryItem(name: "u", value: username),
             URLQueryItem(name: "t", value: token),
@@ -103,43 +110,63 @@ final class Server: ObservableObject {
         ]
         queryItems.append(contentsOf: params)
         components?.queryItems = queryItems
-        
+
         guard let finalURL = components?.url else {
             throw URLError(.badURL)
         }
-        
+
         Server.logger.debug("Requesting: \(finalURL.absoluteString)")
-        
+
         let (data, _) = try await URLSession.shared.data(from: finalURL)
         let decoder = JSONDecoder()
         let decoded = try decoder.decode(TopLevel<T>.self, from: data)
-        
-        
+
         if let error = decoded.subsonicResponse.error {
-            Server.logger.debug("subsonic api error: { code: \(error.code), message: \(error.message) }")
-            throw SubsonicAPIError.serverError(code: error.code, message: error.message)
+            Server.logger.debug(
+                "subsonic api error: { code: \(error.code), message: \(error.message) }"
+            )
+            throw SubsonicAPIError.serverError(
+                code: error.code,
+                message: error.message
+            )
         }
-        
+
         return decoded.subsonicResponse.data
+    }
+
+    func streamURL(for songID: String) -> URL? {
+        let salt = salter()
+        let token = md5(from: "\(password)\(salt)")
+        var components = URLComponents(string: baseURL)
+        components?.path = "/rest/stream"
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: songID),
+            URLQueryItem(name: "u", value: username),
+            URLQueryItem(name: "t", value: token),
+            URLQueryItem(name: "s", value: salt),
+            URLQueryItem(name: "v", value: version),
+            URLQueryItem(name: "c", value: client),
+        ]
+        return components?.url
     }
     
     func getCoverArt(id: String, size: Int = 300) async throws -> Data {
         let salt = salter()
-         let token = md5(from: "\(password)\(salt)")
-         var components = URLComponents(string: baseURL)
-         components?.path = "/rest/getCoverArt"
-         components?.queryItems = [
-             URLQueryItem(name: "id", value: id),
-             URLQueryItem(name: "size", value: "\(size)"),
-             URLQueryItem(name: "u", value: username),
-             URLQueryItem(name: "t", value: token),
-             URLQueryItem(name: "s", value: salt),
-             URLQueryItem(name: "v", value: version),
-             URLQueryItem(name: "c", value: client),
-         ]
-         guard let url = components?.url else { throw URLError(.badURL) }
-         let (data, _) = try await URLSession.shared.data(from: url)
-         return data
+        let token = md5(from: "\(password)\(salt)")
+        var components = URLComponents(string: baseURL)
+        components?.path = "/rest/getCoverArt"
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: id),
+            URLQueryItem(name: "size", value: "\(size)"),
+            URLQueryItem(name: "u", value: username),
+            URLQueryItem(name: "t", value: token),
+            URLQueryItem(name: "s", value: salt),
+            URLQueryItem(name: "v", value: version),
+            URLQueryItem(name: "c", value: client),
+        ]
+        guard let url = components?.url else { throw URLError(.badURL) }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return data
     }
 
     func ping() async throws -> SubsonicResponse<PingResponse>? {
@@ -162,37 +189,54 @@ final class Server: ObservableObject {
         }
 
         let (data, _) = try await URLSession.shared.data(from: finalURL)
-        let decoded = try JSONDecoder().decode(TopLevel<PingResponse>.self, from: data)
+        let decoded = try JSONDecoder().decode(
+            TopLevel<PingResponse>.self,
+            from: data
+        )
         return decoded.subsonicResponse
     }
 
-    func getAlbumList(type: String = "newest", size: Int = 50, offset: Int = 0) async throws -> AlbumList {
-        return try await apiCall(endpoint: "getAlbumList", params: [URLQueryItem(name: "type", value: type), URLQueryItem(name: "size", value: size.description), URLQueryItem(name: "offset", value: offset.description)]) ?? AlbumList(album: [])
+    func getAlbumList(type: String = "newest", size: Int = 50, offset: Int = 0)
+        async throws -> AlbumList
+    {
+        return try await apiCall(
+            endpoint: "getAlbumList",
+            params: [
+                URLQueryItem(name: "type", value: type),
+                URLQueryItem(name: "size", value: size.description),
+                URLQueryItem(name: "offset", value: offset.description),
+            ]
+        ) ?? AlbumList(album: [])
     }
 
     func getArtists() async throws -> ArtistsResponse {
-        return try await apiCall(endpoint: "getArtists") ?? ArtistsResponse(index: [])
+        return try await apiCall(endpoint: "getArtists")
+            ?? ArtistsResponse(index: [])
     }
 
     func getGenres() async throws -> GenresResponse {
-        return try await apiCall(endpoint: "getGenres") ?? GenresResponse(genre: [])
+        return try await apiCall(endpoint: "getGenres")
+            ?? GenresResponse(genre: [])
     }
 
     // Retrives information from single album
     func getAlbum(albumId: String) async throws -> SongsResponse {
-        return try await apiCall(endpoint: "getAlbum", params: [URLQueryItem(name: "id", value: albumId)]) ?? SongsResponse(song: [])
+        return try await apiCall(
+            endpoint: "getAlbum",
+            params: [URLQueryItem(name: "id", value: albumId)]
+        ) ?? SongsResponse(song: [])
     }
+    
 
     @MainActor
     func sync(modelContext: ModelContext) async {
         if baseURL.isEmpty { return }
         self.isLoading = true
         defer { self.isLoading = false }
-        
+
         do {
             try modelContext.delete(model: Album.self)
             try modelContext.delete(model: Artist.self)
-            try modelContext.delete(model: Song.self)
             try modelContext.save()
 
             var offset = 0
@@ -215,72 +259,33 @@ final class Server: ObservableObject {
                         artistId: albumData.artistId ?? "",
                         musicBrainzId: albumData.musicBrainzId ?? "",
                         sortName: albumData.sortName ?? albumData.name,
-                        displayAlbumArtist: albumData.displayAlbumArtist ?? albumData.artist
+                        displayAlbumArtist: albumData.displayAlbumArtist
+                            ?? albumData.artist,
+                        created: albumData.createdDate ?? Date()
                     )
                     modelContext.insert(album)
-                    // download image, cache it
-                    FileManager.default.createFile(
-                        atPath: "\(NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0])/\(album.coverArt).jpg",
-                        contents: Data(),
-                        attributes: nil
-                    )
                 }
+                try modelContext.save()
                 offset += 200
                 albumList = try await getAlbumList(size: 200, offset: offset)
             }
-            
-//            let artistsResponse = try await getArtists()
-//            for index in artistsResponse.index {
-//                for artistInfo in index.artist {
-//                    let artist = Artist(
-//                        artistID: artistInfo.id,
-//                        name: artistInfo.name,
-//                        coverArt: "",
-//                        albumCount: 0,
-//                        artistImageUrl: "",
-//                        musicBrainzId: "",
-//                        sortName: artistInfo.name,
-//                        roles: []
-//                    )
-//                    modelContext.insert(artist)
-//                }
-//            }
-//            
-//            for albumData in albumList.album {
-//                do {
-//                    let songsResponse = try await getAlbum(albumId: albumData.id)
-//                    for songData in songsResponse.song {
-//                        let song = Song(
-//                            songID: songData.id,
-//                            parent: songData.parent ?? "",
-//                            title: songData.title,
-//                            album: songData.album ?? "",
-//                            artist: songData.artist,
-//                            isDir: songData.isDir,
-//                            coverArt: songData.coverArt ?? "",
-//                            created: songData.created ?? "",
-//                            duration: songData.duration ?? 0,
-//                            bitRate: songData.bitRate ?? 0,
-//                            track: songData.track ?? 0,
-//                            year: songData.year ?? 0,
-//                            genre: songData.genre ?? "",
-//                            size: songData.size ?? 0,
-//                            suffix: songData.suffix ?? "",
-//                            contentType: songData.contentType ?? "",
-//                            isVideo: songData.isVideo ?? false,
-//                            path: songData.path ?? "",
-//                            albumId: songData.albumId ?? "",
-//                            artistId: songData.artistId ?? "",
-//                            type: songData.type ?? "",
-//                            discNumber: songData.discNumber ?? 0
-//                        )
-//                        modelContext.insert(song)
-//                    }
-//                } catch {
-//                    Server.logger.warning("Failed to sync songs for album \(albumData.id): \(error.localizedDescription)")
-//                }
-//            }
-            
+
+            let artistsResponse = try await getArtists()
+            for index in artistsResponse.index {
+                for artistInfo in index.artist {
+                    let artist = Artist(
+                        artistID: artistInfo.id,
+                        name: artistInfo.name,
+                        coverArt: "",
+                        albumCount: 0,
+                        artistImageUrl: "",
+                        musicBrainzId: "",
+                        sortName: artistInfo.name
+                    )
+                    modelContext.insert(artist)
+                }
+            }
+
             try modelContext.save()
             Server.logger.info("Sync complete")
         } catch {
@@ -291,15 +296,14 @@ final class Server: ObservableObject {
 
 enum SubsonicAPIError: Error, LocalizedError {
     case serverError(code: Int, message: String)
-    
+
     var errorDescription: String? {
-           switch self {
-           case .serverError(let code, let message):
-               return "Subsonic error \(code): \(message)"
-           }
+        switch self {
+        case .serverError(let code, let message):
+            return "Subsonic error \(code): \(message)"
+        }
     }
 }
-
 
 extension Data {
     var hexEncodedString: String {

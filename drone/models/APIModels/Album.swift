@@ -97,13 +97,14 @@ final class Album: Identifiable, Codable {
     var musicBrainzId: String
     var sortName: String
     var displayAlbumArtist: String
+    var created: Date
 
     init(
         id: String, albumId: String, parent: String, isDir: Bool, title: String,
         name: String, album: String, artist: String, year: Int, genre: String,
         coverArt: String, duration: Float, artistId: String,
         musicBrainzId: String, sortName: String,
-        displayAlbumArtist: String
+        displayAlbumArtist: String, created: Date
     ) {
         self.id = id
         self.albumId = albumId
@@ -121,6 +122,7 @@ final class Album: Identifiable, Codable {
         self.musicBrainzId = musicBrainzId
         self.sortName = sortName
         self.displayAlbumArtist = displayAlbumArtist
+        self.created = created
     }
 
     enum CodingKeys: String, CodingKey {
@@ -141,6 +143,7 @@ final class Album: Identifiable, Codable {
         case musicBrainzId
         case sortName
         case displayAlbumArtist
+        case created
     }
 
     required init(from decoder: Decoder) throws {
@@ -166,6 +169,9 @@ final class Album: Identifiable, Codable {
         self.sortName = try values.decode(String.self, forKey: .sortName)
         self.displayAlbumArtist = try values.decode(
             String.self, forKey: .displayAlbumArtist)
+        self.created = try values.decode(
+            Date.self, forKey: .created
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -185,5 +191,6 @@ final class Album: Identifiable, Codable {
         try container.encode(musicBrainzId, forKey: .musicBrainzId)
         try container.encode(sortName, forKey: .sortName)
         try container.encode(displayAlbumArtist, forKey: .displayAlbumArtist)
+        try container.encode(created, forKey: .created)
     }
 }

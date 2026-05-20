@@ -10,6 +10,10 @@ import SwiftUI
 
 struct RecentlyAddedView: View {
     var body: some View {
-        Text("REcently added")
+        AlbumGridView(
+            title: "Recently Added",
+            sort: [SortDescriptor(\.created, order: .reverse)]
+        )
     }
 }
+

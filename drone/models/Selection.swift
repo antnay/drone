@@ -12,8 +12,8 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     case artists = "Artists"
     case albums = "Albums"
     case songs = "Songs"
-    case playlists = "Playlists"
-    case genres = "Genres"
+//    case playlists = "Playlists"
+//    case genres = "Genres"
 
     var id: String { self.rawValue }
 
@@ -23,8 +23,8 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .artists: return "music.mic"
         case .albums: return "square.stack"
         case .songs: return "music.note"
-        case .playlists: return "music.note.list"
-        case .genres: return "guitars"
+//        case .playlists: return "music.note.list"
+//        case .genres: return "guitars"
         }
     }
 
@@ -38,8 +38,8 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .artists: return "music.mic"
         case .albums: return "square.stack"
         case .songs: return "music.note"
-        case .playlists: return "music.note.list"
-        case .genres: return "guitars"
+//        case .playlists: return "music.note.list"
+//        case .genres: return "guitars"
         }
     }
 
@@ -49,8 +49,8 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .artists: return "Artists"
         case .albums: return "Albums"
         case .songs: return "Songs"
-        case .playlists: return "Playlists"
-        case .genres: return "Genres"
+//        case .playlists: return "Playlists"
+//        case .genres: return "Genres"
         }
     }
 }

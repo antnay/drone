@@ -5,13 +5,14 @@
 //  Created by Anthony on 9/4/25.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct droneApp: App {
     let container: ModelContainer
     @StateObject private var server: Server
+    @StateObject private var player: APlayer
 
     init() {
         do {
@@ -19,22 +20,30 @@ struct droneApp: App {
                 Server.self,
                 Artist.self,
                 Album.self,
-                Song.self,
             ])
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            container = try ModelContainer(for: schema, configurations: [config])
-            
+            let config = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false
+            )
+            container = try ModelContainer(
+                for: schema,
+                configurations: [config]
+            )
+
             let context = container.mainContext
             let fetchRequest = FetchDescriptor<Server>()
             let existingServers = try context.fetch(fetchRequest)
-            
+
+            let srv: Server
             if let firstServer = existingServers.first {
-                _server = StateObject(wrappedValue: firstServer)
+                srv = firstServer
             } else {
-                let newServer = Server()
-                context.insert(newServer)
-                _server = StateObject(wrappedValue: newServer)
+                srv = Server()
+                context.insert(srv)
             }
+
+            _server = StateObject(wrappedValue: srv)
+            _player = StateObject(wrappedValue: APlayer(server: srv))
         } catch {
             fatalError("Could not initialize SwiftData: \(error)")
         }
@@ -44,12 +53,23 @@ struct droneApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(server)
+                .environmentObject(player)
                 .modelContainer(container)
+                .onAppear {
+                    if let window = NSApplication.shared.windows.first {
+                        window.backgroundColor = .background
+                    }
+                }
         }
         Settings {
             SettingsView()
                 .environmentObject(server)
                 .modelContainer(container)
+                .onAppear {
+                    if let window = NSApplication.shared.windows.first {
+                        window.backgroundColor = .background
+                    }
+                }
         }
         .defaultSize(width: 1000, height: 1000)
     }

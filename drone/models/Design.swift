@@ -39,6 +39,36 @@ enum Design {
             static var horizontalPadding: CGFloat { 0 }
             static var bottomPadding: CGFloat { 12 }
         }
+        enum AlbumDetail {
+            static var coverSize: CGFloat { 220 }
+            static var coverCornerRadius: CGFloat { 8 }
+            static var titleFont: Font { .system(size: 24, weight: .bold) }
+            static var artistFont: Font { .system(size: 18, weight: .medium) }
+            static var artistColor: Color { .accent }
+            static var metadataFont: Font { .system(size: 13) }
+            static var metadataColor: Color { .secondary }
+            static var buttonFont: Font { .system(size: 14, weight: .semibold) }
+            static var buttonTint: Color { .accent }
+            static var buttonPaddingH: CGFloat { 20 }
+            static var buttonPaddingV: CGFloat { 8 }
+            static var horizontalPadding: CGFloat { 24 }
+        }
+        enum SongRow {
+            static var trackNumberFont: Font {
+                .system(size: 14).monospacedDigit()
+            }
+            static var trackNumberWidth: CGFloat { 30 }
+            static var titleFont: Font { .system(size: 14) }
+            static var durationFont: Font {
+                .system(size: 13).monospacedDigit()
+            }
+            static var hoverColor: Color { .accent }
+            static var verticalPadding: CGFloat { 10 }
+            static var leadingSpacing: CGFloat { 16 }
+            static var dividerLeading: CGFloat { 46 }
+            static var ellipsisFont: Font { .system(size: 14) }
+
+        }
         enum List {
             static var contentFont: Font { .body.weight(.regular) }
             static var contentLineLimit: Int { 1 }
