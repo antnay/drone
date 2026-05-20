@@ -94,7 +94,6 @@ final class Album: Identifiable, Codable {
     var coverArt: String
     var duration: Float
     var artistId: String
-    var artistImageUrl: String
     var musicBrainzId: String
     var sortName: String
     var displayAlbumArtist: String
@@ -103,7 +102,7 @@ final class Album: Identifiable, Codable {
         id: String, albumId: String, parent: String, isDir: Bool, title: String,
         name: String, album: String, artist: String, year: Int, genre: String,
         coverArt: String, duration: Float, artistId: String,
-        artistImageUrl: String, musicBrainzId: String, sortName: String,
+        musicBrainzId: String, sortName: String,
         displayAlbumArtist: String
     ) {
         self.id = id
@@ -119,7 +118,6 @@ final class Album: Identifiable, Codable {
         self.coverArt = coverArt
         self.duration = duration
         self.artistId = artistId
-        self.artistImageUrl = artistImageUrl
         self.musicBrainzId = musicBrainzId
         self.sortName = sortName
         self.displayAlbumArtist = displayAlbumArtist
@@ -163,8 +161,6 @@ final class Album: Identifiable, Codable {
         self.coverArt = try values.decode(String.self, forKey: .coverArt)
         self.duration = try values.decode(Float.self, forKey: .duration)
         self.artistId = try values.decode(String.self, forKey: .artistId)
-        self.artistImageUrl = try values.decode(
-            String.self, forKey: .artistImageUrl)
         self.musicBrainzId = try values.decode(
             String.self, forKey: .musicBrainzId)
         self.sortName = try values.decode(String.self, forKey: .sortName)
@@ -186,7 +182,6 @@ final class Album: Identifiable, Codable {
         try container.encode(genre, forKey: .genre)
         try container.encode(coverArt, forKey: .coverArt)
         try container.encode(duration, forKey: .duration)
-        try container.encode(artistImageUrl, forKey: .artistImageUrl)
         try container.encode(musicBrainzId, forKey: .musicBrainzId)
         try container.encode(sortName, forKey: .sortName)
         try container.encode(displayAlbumArtist, forKey: .displayAlbumArtist)

@@ -25,7 +25,7 @@ final class Server: ObservableObject {
     @Attribute(.ephemeral) var isLoading: Bool = false
 
     private static let logger = Logger()
-    private final var version = "v16.1"
+    private final var version = "1.16.1"
     private final var client = "Drone"
     private final var format = "json"
 
@@ -65,8 +65,8 @@ final class Server: ObservableObject {
     }
 
     private func salter() -> String {
-        return SymmetricKey(size: .bits128).withUnsafeBytes { Data($0) }
-            .base64EncodedString()
+        let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<15).map { _ in letters.randomElement()! })
     }
 
     private func md5(from string: String) -> String {
@@ -86,7 +86,7 @@ final class Server: ObservableObject {
     }
 
     // Generic API call helper
-    private func apiCall<T: Codable>(endpoint: String, params: [URLQueryItem] = []) async throws -> T {
+    private func apiCall<T: Codable>(endpoint: String, params: [URLQueryItem] = []) async throws -> T? {
         let salt = salter()
         let token = md5(from: "\(password)\(salt)")
         
@@ -114,15 +114,32 @@ final class Server: ObservableObject {
         let decoder = JSONDecoder()
         let decoded = try decoder.decode(TopLevel<T>.self, from: data)
         
+        
         if let error = decoded.subsonicResponse.error {
+            Server.logger.debug("subsonic api error: { code: \(error.code), message: \(error.message) }")
             throw SubsonicAPIError.serverError(code: error.code, message: error.message)
         }
         
-        guard let result = decoded.subsonicResponse.data else {
-            throw SubsonicAPIError.noData
-        }
-        
-        return result
+        return decoded.subsonicResponse.data
+    }
+    
+    func getCoverArt(id: String, size: Int = 300) async throws -> Data {
+        let salt = salter()
+         let token = md5(from: "\(password)\(salt)")
+         var components = URLComponents(string: baseURL)
+         components?.path = "/rest/getCoverArt"
+         components?.queryItems = [
+             URLQueryItem(name: "id", value: id),
+             URLQueryItem(name: "size", value: "\(size)"),
+             URLQueryItem(name: "u", value: username),
+             URLQueryItem(name: "t", value: token),
+             URLQueryItem(name: "s", value: salt),
+             URLQueryItem(name: "v", value: version),
+             URLQueryItem(name: "c", value: client),
+         ]
+         guard let url = components?.url else { throw URLError(.badURL) }
+         let (data, _) = try await URLSession.shared.data(from: url)
+         return data
     }
 
     func ping() async throws -> SubsonicResponse<PingResponse>? {
@@ -149,20 +166,21 @@ final class Server: ObservableObject {
         return decoded.subsonicResponse
     }
 
-    func getAlbumList() async throws -> AlbumList {
-        return try await apiCall(endpoint: "getAlbumList", params: [URLQueryItem(name: "type", value: "newest")])
+    func getAlbumList(type: String = "newest", size: Int = 50, offset: Int = 0) async throws -> AlbumList {
+        return try await apiCall(endpoint: "getAlbumList", params: [URLQueryItem(name: "type", value: type), URLQueryItem(name: "size", value: size.description), URLQueryItem(name: "offset", value: offset.description)]) ?? AlbumList(album: [])
     }
 
     func getArtists() async throws -> ArtistsResponse {
-        return try await apiCall(endpoint: "getArtists")
+        return try await apiCall(endpoint: "getArtists") ?? ArtistsResponse(index: [])
     }
 
     func getGenres() async throws -> GenresResponse {
-        return try await apiCall(endpoint: "getGenres")
+        return try await apiCall(endpoint: "getGenres") ?? GenresResponse(genre: [])
     }
 
-    func getSongs(albumId: String) async throws -> SongsResponse {
-        return try await apiCall(endpoint: "getAlbum", params: [URLQueryItem(name: "id", value: albumId)])
+    // Retrives information from single album
+    func getAlbum(albumId: String) async throws -> SongsResponse {
+        return try await apiCall(endpoint: "getAlbum", params: [URLQueryItem(name: "id", value: albumId)]) ?? SongsResponse(song: [])
     }
 
     @MainActor
@@ -175,82 +193,93 @@ final class Server: ObservableObject {
             try modelContext.delete(model: Album.self)
             try modelContext.delete(model: Artist.self)
             try modelContext.delete(model: Song.self)
+            try modelContext.save()
 
-            let albumList = try await getAlbumList()
-            for albumData in albumList.album {
-                let album = Album(
-                    id: albumData.id,
-                    albumId: albumData.id,
-                    parent: albumData.parent ?? "",
-                    isDir: albumData.isDir ?? true,
-                    title: albumData.title ?? albumData.name,
-                    name: albumData.name,
-                    album: albumData.album ?? albumData.name,
-                    artist: albumData.artist,
-                    year: albumData.year ?? 0,
-                    genre: albumData.genre ?? "",
-                    coverArt: albumData.coverArt ?? "",
-                    duration: Float(albumData.duration ?? 0),
-                    artistId: albumData.artistId ?? "",
-                    artistImageUrl: "",
-                    musicBrainzId: albumData.musicBrainzId ?? "",
-                    sortName: albumData.sortName ?? albumData.name,
-                    displayAlbumArtist: albumData.displayAlbumArtist ?? albumData.artist
-                )
-                modelContext.insert(album)
-            }
-            
-            let artistsResponse = try await getArtists()
-            for index in artistsResponse.index {
-                for artistInfo in index.artist {
-                    let artist = Artist(
-                        artistID: artistInfo.id,
-                        name: artistInfo.name,
-                        coverArt: "",
-                        albumCount: 0,
-                        artistImageUrl: "",
-                        musicBrainzId: "",
-                        sortName: artistInfo.name,
-                        roles: []
+            var offset = 0
+            var albumList = try await getAlbumList(size: 200, offset: offset)
+            while !albumList.isEmpty {
+                for albumData in albumList.album {
+                    let album = Album(
+                        id: albumData.id,
+                        albumId: albumData.id,
+                        parent: albumData.parent ?? "",
+                        isDir: albumData.isDir ?? true,
+                        title: albumData.title ?? albumData.name,
+                        name: albumData.name,
+                        album: albumData.album ?? albumData.name,
+                        artist: albumData.artist,
+                        year: albumData.year ?? 0,
+                        genre: albumData.genre ?? "",
+                        coverArt: albumData.coverArt ?? "",
+                        duration: Float(albumData.duration ?? 0),
+                        artistId: albumData.artistId ?? "",
+                        musicBrainzId: albumData.musicBrainzId ?? "",
+                        sortName: albumData.sortName ?? albumData.name,
+                        displayAlbumArtist: albumData.displayAlbumArtist ?? albumData.artist
                     )
-                    modelContext.insert(artist)
+                    modelContext.insert(album)
+                    // download image, cache it
+                    FileManager.default.createFile(
+                        atPath: "\(NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0])/\(album.coverArt).jpg",
+                        contents: Data(),
+                        attributes: nil
+                    )
                 }
+                offset += 200
+                albumList = try await getAlbumList(size: 200, offset: offset)
             }
             
-            for albumData in albumList.album {
-                do {
-                    let songsResponse = try await getSongs(albumId: albumData.id)
-                    for songData in songsResponse.song {
-                        let song = Song(
-                            songID: songData.id,
-                            parent: songData.parent ?? "",
-                            title: songData.title,
-                            album: songData.album ?? "",
-                            artist: songData.artist,
-                            isDir: songData.isDir,
-                            coverArt: songData.coverArt ?? "",
-                            created: songData.created ?? "",
-                            duration: songData.duration ?? 0,
-                            bitRate: songData.bitRate ?? 0,
-                            track: songData.track ?? 0,
-                            year: songData.year ?? 0,
-                            genre: songData.genre ?? "",
-                            size: songData.size ?? 0,
-                            suffix: songData.suffix ?? "",
-                            contentType: songData.contentType ?? "",
-                            isVideo: songData.isVideo ?? false,
-                            path: songData.path ?? "",
-                            albumId: songData.albumId ?? "",
-                            artistId: songData.artistId ?? "",
-                            type: songData.type ?? "",
-                            discNumber: songData.discNumber ?? 0
-                        )
-                        modelContext.insert(song)
-                    }
-                } catch {
-                    Server.logger.warning("Failed to sync songs for album \(albumData.id): \(error.localizedDescription)")
-                }
-            }
+//            let artistsResponse = try await getArtists()
+//            for index in artistsResponse.index {
+//                for artistInfo in index.artist {
+//                    let artist = Artist(
+//                        artistID: artistInfo.id,
+//                        name: artistInfo.name,
+//                        coverArt: "",
+//                        albumCount: 0,
+//                        artistImageUrl: "",
+//                        musicBrainzId: "",
+//                        sortName: artistInfo.name,
+//                        roles: []
+//                    )
+//                    modelContext.insert(artist)
+//                }
+//            }
+//            
+//            for albumData in albumList.album {
+//                do {
+//                    let songsResponse = try await getAlbum(albumId: albumData.id)
+//                    for songData in songsResponse.song {
+//                        let song = Song(
+//                            songID: songData.id,
+//                            parent: songData.parent ?? "",
+//                            title: songData.title,
+//                            album: songData.album ?? "",
+//                            artist: songData.artist,
+//                            isDir: songData.isDir,
+//                            coverArt: songData.coverArt ?? "",
+//                            created: songData.created ?? "",
+//                            duration: songData.duration ?? 0,
+//                            bitRate: songData.bitRate ?? 0,
+//                            track: songData.track ?? 0,
+//                            year: songData.year ?? 0,
+//                            genre: songData.genre ?? "",
+//                            size: songData.size ?? 0,
+//                            suffix: songData.suffix ?? "",
+//                            contentType: songData.contentType ?? "",
+//                            isVideo: songData.isVideo ?? false,
+//                            path: songData.path ?? "",
+//                            albumId: songData.albumId ?? "",
+//                            artistId: songData.artistId ?? "",
+//                            type: songData.type ?? "",
+//                            discNumber: songData.discNumber ?? 0
+//                        )
+//                        modelContext.insert(song)
+//                    }
+//                } catch {
+//                    Server.logger.warning("Failed to sync songs for album \(albumData.id): \(error.localizedDescription)")
+//                }
+//            }
             
             try modelContext.save()
             Server.logger.info("Sync complete")
@@ -260,9 +289,15 @@ final class Server: ObservableObject {
     }
 }
 
-enum SubsonicAPIError: Error {
+enum SubsonicAPIError: Error, LocalizedError {
     case serverError(code: Int, message: String)
-    case noData
+    
+    var errorDescription: String? {
+           switch self {
+           case .serverError(let code, let message):
+               return "Subsonic error \(code): \(message)"
+           }
+    }
 }
 
 

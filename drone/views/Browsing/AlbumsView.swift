@@ -26,7 +26,6 @@ struct AlbumsView: View {
                             await server.sync(modelContext: modelContext)
                         }
                     }) {
-                        
                         if server.getIsloading() {
                             ProgressView()
                                 .controlSize(.small)
@@ -40,13 +39,17 @@ struct AlbumsView: View {
                 .padding(.horizontal, design.View.horizontalPadding)
                 .padding(.top, 20)
 
-                LazyVGrid(
-                    columns: columns,
-                    spacing: design.Grid.verticalSpacing
-                ) {
-                    albumViewBuilder()
+                if server.isLoading {
+                    Text("loading...")
+                } else {
+                    LazyVGrid(
+                        columns: columns,
+                        spacing: design.Grid.verticalSpacing
+                    ) {
+                        albumViewBuilder()
+                    }
+                    .padding(.horizontal, design.View.horizontalPadding)
                 }
-                .padding(.horizontal, design.View.horizontalPadding)
             }
             .padding(.bottom, 40)
         }
@@ -81,7 +84,7 @@ struct AlbumsView: View {
                 AlbumCard(
                     name: album.name,
                     artist: album.artist,
-                    imagePath: album.coverArt
+                    coverArtID: album.coverArt
                 )
             }
         }
@@ -91,12 +94,14 @@ struct AlbumsView: View {
 struct AlbumCard: View {
     var name: String
     var artist: String
-    var imagePath: String
+    var coverArtID: String
+    @EnvironmentObject var server: Server
+    @State private var image: NSImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                if let image = NSImage(contentsOfFile: imagePath) {
+                if let image {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -113,6 +118,13 @@ struct AlbumCard: View {
             .aspectRatio(1, contentMode: .fit)
             .cornerRadius(design.AlbumCard.cornerRadius)
             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .task {
+                guard !coverArtID.isEmpty else { return }
+                let id = coverArtID
+                let data = try? await server.getCoverArt(id: id)
+                guard let data else { return }
+                image = try? await ImageCacheManager.shared.image(for: id, data: data)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)

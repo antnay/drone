@@ -94,7 +94,7 @@ struct SourceView: View {
         Task {
             do {
                 if let res = try await server.ping() {
-                    server.provider = res.type ?? "Subsonic"
+                    server.provider = res.type
                     server.status = res.status
                     errorMessage = nil
                     try modelContext.save()
