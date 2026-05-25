@@ -8,11 +8,24 @@
 import SwiftData
 import SwiftUI
 
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+}
+
 @main
 struct droneApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let container: ModelContainer
     @StateObject private var server: Server
     @StateObject private var player: APlayer
+    @StateObject private var router: NavigationRouter = NavigationRouter()
 
     init() {
         do {
@@ -50,14 +63,16 @@ struct droneApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
                 .environmentObject(server)
                 .environmentObject(player)
+                .environmentObject(router)
                 .modelContainer(container)
                 .onAppear {
-                    if let window = NSApplication.shared.windows.first {
+                    if let window = NSApplication.shared.windows.first(where: { !($0 is NSPanel) }) {
                         window.backgroundColor = .background
+                        window.makeKeyAndOrderFront(nil)
                     }
                 }
         }
@@ -72,5 +87,13 @@ struct droneApp: App {
                 }
         }
         .defaultSize(width: 1000, height: 1000)
+
+        MenuBarExtra("Drone", systemImage: "music.note") {
+            MenuBarView()
+                .environmentObject(server)
+                .environmentObject(player)
+                .environmentObject(router)
+        }
+        .menuBarExtraStyle(.window)
     }
 }

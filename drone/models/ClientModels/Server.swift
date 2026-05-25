@@ -219,6 +219,26 @@ final class Server: ObservableObject {
             ?? GenresResponse(genre: [])
     }
 
+    func getRandomSongs(size: Int = 500) async throws -> SongsResponse {
+        return try await apiCall(
+            endpoint: "getRandomSongs",
+            params: [URLQueryItem(name: "size", value: size.description)]
+        ) ?? SongsResponse(song: [])
+    }
+
+    func search3(songCount: Int = 100, songOffset: Int = 0) async throws -> SearchResult3 {
+        return try await apiCall(
+            endpoint: "search3",
+            params: [
+                URLQueryItem(name: "query", value: ""),
+                URLQueryItem(name: "artistCount", value: "0"),
+                URLQueryItem(name: "albumCount", value: "0"),
+                URLQueryItem(name: "songCount", value: songCount.description),
+                URLQueryItem(name: "songOffset", value: songOffset.description),
+            ]
+        ) ?? SearchResult3()
+    }
+
     // Retrives information from single album
     func getAlbum(albumId: String) async throws -> SongsResponse {
         return try await apiCall(

@@ -182,6 +182,14 @@ struct SongResponse: Codable, Identifiable {
     let discNumber: Int?
 }
 
+struct SearchResult3: Codable {
+    let song: [SongResponse]
+
+    init(song: [SongResponse] = []) {
+        self.song = song
+    }
+}
+
 struct ReplayGain: Codable {
 }
 

@@ -106,7 +106,7 @@ struct AlbumCard: View {
     @State private var image: NSImage?
 
     var body: some View {
-        NavigationLink(destination: AlbumDetailView(album: album)) {
+        NavigationLink(value: album) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     if let image {

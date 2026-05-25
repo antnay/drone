@@ -9,7 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var server: Server
-    @State private var selectedNavItem: NavigationItem = .albums
+    @EnvironmentObject var player: APlayer
+    @EnvironmentObject var router: NavigationRouter
     @State private var searchText: String = ""
 
     var body: some View {
@@ -22,8 +23,8 @@ struct ContentView: View {
                         .padding(.leading, 20)
                         .padding(.top, 20)
                         .padding(.bottom, 8)
-                    
-                    List(NavigationItem.allCases, selection: $selectedNavItem) { item in
+
+                    List(NavigationItem.allCases, selection: $router.selectedNavItem) { item in
                         NavigationLink(value: item) {
                             Label(item.rawValue, systemImage: item.icon)
                                 .font(.system(size: 13, weight: .medium))
@@ -32,7 +33,7 @@ struct ContentView: View {
                     .listStyle(.sidebar)
                 }
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
-                
+
                 if server.getIsloading() {
                     Spacer()
                     HStack {
@@ -45,8 +46,26 @@ struct ContentView: View {
                     .padding(.bottom, 20)
                 }
             } detail: {
-                NavigationStack {
-                    DetailView(sidebarSelection: $selectedNavItem)
+                NavigationStack(path: $router.path) {
+                    DetailView(sidebarSelection: $router.selectedNavItem)
+                        .onChange(of: router.pendingAlbum) { _, album in
+                            if let album {
+                                router.path.append(album)
+                                router.pendingAlbum = nil
+                            }
+                        }
+                        .onChange(of: router.pendingArtist) { _, artist in
+                            if let artist {
+                                router.path.append(artist)
+                                router.pendingArtist = nil
+                            }
+                        }
+                        .navigationDestination(for: Album.self) { album in
+                            AlbumDetailView(album: album)
+                        }
+                        .navigationDestination(for: Artist.self) { artist in
+                            ArtistDetailView(artist: artist)
+                        }
                         .toolbar {
                             ToolbarItem(placement: .navigation) {
                                 Button(action: {}) {
@@ -74,7 +93,7 @@ struct ContentView: View {
                         }
                 }
             }
-            
+
             PlayerView()
         }
     }

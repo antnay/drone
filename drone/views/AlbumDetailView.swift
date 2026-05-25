@@ -10,6 +10,7 @@ import SwiftUI
 struct AlbumDetailView: View {
     @EnvironmentObject var server: Server
     @EnvironmentObject var player: APlayer
+    @Environment(\.colorScheme) var colorScheme
     let album: Album
     @State private var songs: [Song] = []
     @State private var isLoading = true
@@ -34,6 +35,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .clearHoverOnRightClick { hoveredSongID = nil }
         .task {
             await loadAlbum()
         }
@@ -63,20 +65,26 @@ struct AlbumDetailView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(
                         Color(nsColor: .gray),
-//                        LinearGradient(
-//                            colors: [
-//                                Color.white.opacity(0.5),
-//                                Color.white.opacity(0.15),
-//                                Color.black.opacity(0.1),
-//                                Color.white.opacity(0.2),
-//                            ],
-//                            startPoint: .topLeading,
-//                            endPoint: .bottomTrailing
-//                        ),
+                        //                        LinearGradient(
+                        //                            colors: [
+                        //                                Color.white.opacity(0.5),
+                        //                                Color.white.opacity(0.15),
+                        //                                Color.black.opacity(0.1),
+                        //                                Color.white.opacity(0.2),
+                        //                            ],
+                        //                            startPoint: .topLeading,
+                        //                            endPoint: .bottomTrailing
+                        //                        ),
                         lineWidth: 0.35
                     )
             )
-            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+            .shadow(
+                color:
+                    colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.95),
+                radius: 8,
+                x: 0,
+                y: 4
+            )
 
             // Album info
             VStack(alignment: .leading, spacing: 2) {
@@ -162,18 +170,14 @@ struct AlbumDetailView: View {
                     .font(.system(size: 13).monospacedDigit())
                     .foregroundStyle(.secondary)
 
-                Button(action: { /* context menu actions */  }) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .opacity(hoveredSongID == song.songID ? 1 : 0)
+                SongMenuButton(song: song, font: .system(size: 14))
+                    .opacity(hoveredSongID == song.songID ? 1 : 0)
             }
             .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .songContextMenu(song: song)
         .onHover { hovering in
             hoveredSongID = hovering ? song.songID : nil
         }
