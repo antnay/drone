@@ -1,5 +1,8 @@
 # Drone
 
-A modern, native macOS client for Subsonic music servers that provides a clean, grid-based interface for browsing and streaming personal music collections.
+A native MacOS client for playing music from your Subsonic/Navidrome server.
 
-Swift, SwiftUI
+![drone](./images/drone.png)
+
+Features:
+- parametic eq
