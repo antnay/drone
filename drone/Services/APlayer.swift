@@ -7,6 +7,7 @@
 
 import AVFoundation
 import Combine
+import CoreAudio
 import MediaPlayer
 import SwiftUI
 
@@ -19,6 +20,10 @@ class APlayer: ObservableObject {
     @Published var curIndex: Int = 0
     @Published var currentTime: Double = 0
     @Published var isShuffling: Bool = false
+    /// Controls visibility of the right-side queue sidebar. Lives here (rather
+    /// than in a view) because the toggle (PlayerView) and the panel itself
+    /// (ContentView) are in separate parts of the hierarchy.
+    @Published var showQueueSidebar: Bool = false
     @Published var volume: Float = 1.0 {
         didSet {
             player.volume = volume
@@ -28,10 +33,27 @@ class APlayer: ObservableObject {
 
     var currentDuration: Double { Double(current?.duration ?? 0) }
 
+    /// Parametric equalizer. Owns the EQ settings and the AUNBandEQ unit that
+    /// runs inside the audio tap installed on each AVPlayerItem.
+    let equalizer = EqualizerController()
+
     var shuffler = LibraryShuffler()
 
     private let player = AVPlayer()
     private var timeObserver: Any?
+    private var endOfItemObserver: NSObjectProtocol?
+    private var failedItemObserver: NSObjectProtocol?
+
+    // CoreAudio: listens for the system default output device changing. macOS
+    // has no AVAudioSession route-change notification, so this is how we detect
+    // an AirPod being removed (macOS auto-switches output to built-in speakers).
+    private let defaultOutputDeviceAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private var outputDeviceListener: AudioObjectPropertyListenerBlock?
+
     var server: Server?
 
     init(server: Server? = nil) {
@@ -58,7 +80,8 @@ class APlayer: ObservableObject {
         }
 
         setupCC()
-        NotificationCenter.default.addObserver(
+        setupOutputDeviceListener()
+        endOfItemObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
             queue: .main
@@ -67,12 +90,51 @@ class APlayer: ObservableObject {
                 self?.forward()
             }
         }
+        failedItemObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey]
+                as? Error
+            Task { @MainActor in
+                self?.handlePlaybackFailure(error)
+            }
+        }
     }
 
     nonisolated deinit {
+        // AVPlayer.removeTimeObserver and NotificationCenter.removeObserver are
+        // both safe to call from any thread.
         if let observer = timeObserver {
-            // AVPlayer.removeTimeObserver is safe to call from any thread
+            player.removeTimeObserver(observer)
         }
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = failedItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let listener = outputDeviceListener {
+            // Must remove with the exact same address + block we registered.
+            var address = defaultOutputDeviceAddress
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                DispatchQueue.main,
+                listener
+            )
+        }
+    }
+
+    private func handlePlaybackFailure(_ error: Error?) {
+        Server.logger.error(
+            "Playback failed: \(error?.localizedDescription ?? "unknown error")"
+        )
+        player.pause()
+        isPlaying = false
+        MPNowPlayingInfoCenter.default().playbackState = .paused
+        updateNowPlaying()
     }
 
     func shuffleAlbum(_ songs: [Song]) {
@@ -113,9 +175,15 @@ class APlayer: ObservableObject {
         guard let current else { return }
 
         guard let url = server?.streamURL(for: current.songID) else { return }
-        let playerItem = AVPlayerItem(url: url)
+        let asset = AVURLAsset(url: url)
+        let playerItem = AVPlayerItem(asset: asset)
         player.replaceCurrentItem(with: playerItem)
-        player.play()
+
+        // Attach the EQ tap BEFORE starting playback. Setting audioMix on an
+        // item that's already playing often doesn't take effect (the pipeline
+        // is already built), so we defer player.play() until the mix is set.
+        installEQTap(on: playerItem, asset: asset)
+
         isPlaying = true
         MPNowPlayingInfoCenter.default().playbackState = .playing
 
@@ -133,6 +201,57 @@ class APlayer: ObservableObject {
                 nowPlayingImage = nil
             }
             updateNowPlaying()
+        }
+    }
+
+    /// Loads the asset's audio track, installs the EQ processing tap on the
+    /// given item, and THEN starts playback. Attaching audioMix before
+    /// play() is what makes the tap actually engage. Heavily logged so we can
+    /// see exactly where the pipeline breaks.
+    private func installEQTap(on item: AVPlayerItem, asset: AVURLAsset) {
+        let context = equalizer.tapContext
+        EQLog.install.log("installEQTap: begin for item \(ObjectIdentifier(item).debugDescription, privacy: .public)")
+        EQLog.line("install", "begin for item \(ObjectIdentifier(item))")
+
+        let start = Date()
+        Task {
+            let track: AVAssetTrack?
+            do {
+                track = try await asset.loadTracks(withMediaType: .audio).first
+            } catch {
+                EQLog.install.error("installEQTap: loadTracks FAILED: \(error.localizedDescription, privacy: .public)")
+                EQLog.line("install", "loadTracks FAILED: \(error.localizedDescription)")
+                await MainActor.run { self.player.play() }  // play anyway, untapped
+                return
+            }
+
+            let elapsedMs = Date().timeIntervalSince(start) * 1000
+            guard let track else {
+                EQLog.install.error("installEQTap: no audio track found (after \(elapsedMs, format: .fixed(precision: 1))ms)")
+                EQLog.line("install", "no audio track found after \(String(format: "%.1f", elapsedMs))ms")
+                await MainActor.run { self.player.play() }
+                return
+            }
+            EQLog.install.log("installEQTap: audio track loaded in \(elapsedMs, format: .fixed(precision: 1), privacy: .public)ms")
+            EQLog.line("install", "audio track loaded in \(String(format: "%.1f", elapsedMs))ms")
+
+            let mix = EQAudioTap.makeAudioMix(for: track, context: context)
+            EQLog.install.log("installEQTap: makeAudioMix returned \(mix == nil ? "nil" : "non-nil", privacy: .public)")
+            EQLog.line("install", "makeAudioMix -> \(mix == nil ? "nil" : "non-nil")")
+
+            await MainActor.run {
+                let stillCurrent = self.player.currentItem === item
+                if stillCurrent {
+                    item.audioMix = mix
+                    let attached = item.audioMix != nil
+                    EQLog.install.log("installEQTap: audioMix set; item.audioMix != nil = \(attached, privacy: .public); starting play()")
+                    EQLog.line("install", "audioMix set, non-nil=\(attached); starting play()")
+                    self.player.play()
+                } else {
+                    EQLog.install.log("installEQTap: item no longer current; skipping mix + play")
+                    EQLog.line("install", "item no longer current; skipping")
+                }
+            }
         }
     }
 
@@ -156,7 +275,15 @@ class APlayer: ObservableObject {
 
     func forward() {
         Server.logger.debug("forward")
-        guard curIndex + 1 < queue.count else { return }
+        guard curIndex + 1 < queue.count else {
+            // Reached the end of the queue: stop playback state so the
+            // transport controls and now-playing info don't stay "playing".
+            player.pause()
+            isPlaying = false
+            MPNowPlayingInfoCenter.default().playbackState = .paused
+            updateNowPlaying()
+            return
+        }
         curIndex += 1
         play()
     }
@@ -190,6 +317,25 @@ class APlayer: ObservableObject {
         }
     }
 
+    /// Songs queued to play after the current track, in play order
+    /// (`upcoming.first` is the very next song).
+    var upcoming: ArraySlice<Song> {
+        let start = curIndex + 1
+        guard start < queue.count else { return [] }
+        return queue[start...]
+    }
+
+    /// Removes every song after the current track, leaving the current one
+    /// playing. If nothing is playing, empties the queue entirely.
+    func clearQueue() {
+        if current != nil, curIndex < queue.count {
+            queue.removeSubrange((curIndex + 1)...)
+        } else {
+            queue = []
+            curIndex = 0
+        }
+    }
+
     func removeFromQueue(at index: Int) {
         guard index >= 0, index < queue.count else { return }
         queue.remove(at: index)
@@ -201,9 +347,42 @@ class APlayer: ObservableObject {
         }
     }
 
+    /// Registers a CoreAudio listener for changes to the system default output
+    /// device. When an AirPod (or any output device) is removed, macOS switches
+    /// the default output — e.g. to the built-in speakers — which fires this
+    /// listener. We pause playback in response, mirroring the "unplug
+    /// headphones = pause" behaviour of Apple Music. There's no AVAudioSession
+    /// on macOS, so CoreAudio is the correct route-change signal here.
+    private func setupOutputDeviceListener() {
+        var address = defaultOutputDeviceAddress
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            // The callback is delivered on the DispatchQueue we pass below
+            // (main), but APlayer is @MainActor-isolated, so hop explicitly to
+            // satisfy isolation regardless of delivery thread.
+            Task { @MainActor [weak self] in
+                guard let self, self.isPlaying else { return }
+                self.pause()
+            }
+        }
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+        if status == noErr {
+            outputDeviceListener = listener
+        } else {
+            Server.logger.error(
+                "Failed to register default-output-device listener: \(status)"
+            )
+        }
+    }
+
     private func setupCC() {
         let commandCenter = MPRemoteCommandCenter.shared()
 
+        commandCenter.togglePlayPauseCommand.isEnabled = true
         commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             if self.isPlaying {
@@ -211,6 +390,27 @@ class APlayer: ObservableObject {
             } else {
                 self.resume()
             }
+            return .success
+        }
+
+        // AirPods stem presses and the system often send the *discrete* play /
+        // pause commands rather than the toggle, so handle them explicitly or
+        // they get dropped and the AirPod gesture appears to do nothing.
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self, self.current != nil, !self.isPlaying else {
+                return .commandFailed
+            }
+            self.resume()
+            return .success
+        }
+
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self, self.current != nil, self.isPlaying else {
+                return .commandFailed
+            }
+            self.pause()
             return .success
         }
 

@@ -13,9 +13,13 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            Tab("Source", systemImage: "network") {
+            Tab("Connection", systemImage: "network") {
                 SourceView()
             }
+            Tab("Playback", systemImage: "speaker.wave.2") {
+                PlaybackSettingsView()
+            }
+            // Additional tabs (Behaviors, Appearance, …) go here later.
         }
         .frame(width: 1000, height: 500, alignment: .center)
     }

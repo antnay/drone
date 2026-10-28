@@ -27,6 +27,12 @@ struct MenuBarView: View {
             }
         }
         .frame(width: 340)
+        .onReceive(NotificationCenter.default.publisher(for: .droneReopenRequested)) { _ in
+            // MenuBarView is always alive, so it can recreate the main window
+            // even when ContentView's WindowGroup scene has been fully closed.
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     // MARK: - Player row

@@ -10,7 +10,9 @@ import SwiftUI
 struct AlbumDetailView: View {
     @EnvironmentObject var server: Server
     @EnvironmentObject var player: APlayer
+    @EnvironmentObject var router: NavigationRouter
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.modelContext) private var modelContext
     let album: Album
     @State private var songs: [Song] = []
     @State private var isLoading = true
@@ -80,7 +82,8 @@ struct AlbumDetailView: View {
             )
             .shadow(
                 color:
-                    colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.95),
+                    colorScheme == .dark
+                    ? Color.black.opacity(0.2) : Color.black.opacity(0.95),
                 radius: 8,
                 x: 0,
                 y: 4
@@ -115,7 +118,9 @@ struct AlbumDetailView: View {
                 Spacer().frame(height: 12)
 
                 HStack(spacing: 12) {
-                    Button(action: { player.play() }) {
+                    Button(action: {
+                        player.playAlbum(songs: songs, startingAt: 0)
+                    }) {
                         Label("Play", systemImage: "play.fill")
                     }
                     .buttonStyle(PillButtonStyle())
@@ -123,6 +128,28 @@ struct AlbumDetailView: View {
                         Label("Shuffle", systemImage: "shuffle")
                     }
                     .buttonStyle(PillButtonStyle())
+
+                    Menu {
+                        albumMenuButtons(
+                            AlbumActions(
+                                album: album,
+                                server: server,
+                                player: player,
+                                router: router,
+                                modelContext: modelContext
+                            ),
+                            includeGoToArtist: false
+                        )
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
             }
         }
@@ -141,11 +168,20 @@ struct AlbumDetailView: View {
     }
 
     private func songRow(song: Song, index: Int) -> some View {
-        Button(action: { player.playAlbum(songs: songs, startingAt: index) }) {
+        let isCurrent = song.songID == player.current?.songID
+        return Button(action: { player.playAlbum(songs: songs, startingAt: index) }) {
             HStack(spacing: 16) {
-                // Track number or play icon on hover
+                // Waveform when current, play icon on hover, otherwise track number
                 ZStack {
-                    if hoveredSongID == song.songID {
+                    if isCurrent {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.accent)
+                            .symbolEffect(
+                                .variableColor.iterative,
+                                isActive: player.isPlaying
+                            )
+                    } else if hoveredSongID == song.songID {
                         Image(systemName: "play.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(.accent)
@@ -158,9 +194,10 @@ struct AlbumDetailView: View {
                 .frame(width: 30, alignment: .trailing)
 
                 Text(song.title)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
                     .foregroundStyle(
-                        hoveredSongID == song.songID ? .accent : .primary
+                        (isCurrent || hoveredSongID == song.songID)
+                            ? Color.accentColor : .primary
                     )
                     .lineLimit(1)
 
@@ -202,32 +239,7 @@ struct AlbumDetailView: View {
         // Load songs
         do {
             let response = try await server.getAlbum(albumId: album.albumId)
-            songs = response.song.map { s in
-                Song(
-                    songID: s.id,
-                    parent: s.parent ?? "",
-                    title: s.title,
-                    album: s.album ?? "",
-                    artist: s.artist,
-                    isDir: s.isDir,
-                    coverArt: s.coverArt ?? "",
-                    created: s.created ?? "",
-                    duration: s.duration ?? 0,
-                    bitRate: s.bitRate ?? 0,
-                    track: s.track ?? 0,
-                    year: s.year ?? 0,
-                    genre: s.genre ?? "",
-                    size: s.size ?? 0,
-                    suffix: s.suffix ?? "",
-                    contentType: s.contentType ?? "",
-                    isVideo: s.isVideo ?? false,
-                    path: s.path ?? "",
-                    albumId: s.albumId ?? "",
-                    artistId: s.artistId ?? "",
-                    type: s.type ?? "",
-                    discNumber: s.discNumber ?? 0
-                )
-            }.sorted {
+            songs = response.song.map(Song.init(response:)).sorted {
                 $0.discNumber == $1.discNumber
                     ? $0.track < $1.track : $0.discNumber < $1.discNumber
             }

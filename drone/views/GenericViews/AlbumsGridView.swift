@@ -102,51 +102,61 @@ struct AlbumGridView: View {
 
 struct AlbumCard: View {
     let album: Album
+    var onTap: (() -> Void)? = nil
     @EnvironmentObject var server: Server
     @State private var image: NSImage?
 
     var body: some View {
-        NavigationLink(value: album) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    if let image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } else {
-                        RoundedRectangle(cornerRadius: design.AlbumCard.cornerRadius)
-                            .fill(Color.secondary.opacity(0.1))
-                            .overlay(
-                                Image(systemName: "music.note")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.secondary.opacity(0.3))
-                            )
-                    }
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .cornerRadius(design.AlbumCard.cornerRadius)
-                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                .task {
-                    guard !album.coverArt.isEmpty else { return }
-                    let id = album.coverArt
-                    let data = try? await server.getCoverArt(id: id)
-                    guard let data else { return }
-                    image = try? await ImageCacheManager.shared.image(for: id, data: data)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(album.name)
-                        .font(design.AlbumCard.titleFont)
-                        .lineLimit(design.AlbumCard.titleLineLimit)
-                        .foregroundStyle(.primary)
-                    Text(album.artist)
-                        .font(design.AlbumCard.artistFont)
-                        .foregroundColor(design.AlbumCard.artistColor)
-                        .lineLimit(design.AlbumCard.artistLineLimit)
-                }
+        Group {
+            if let onTap {
+                Button(action: onTap) { cardContent }
+            } else {
+                NavigationLink(value: album) { cardContent }
             }
         }
         .buttonStyle(.plain)
+        .albumContextMenu(album: album)
+    }
+
+    private var cardContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    RoundedRectangle(cornerRadius: design.AlbumCard.cornerRadius)
+                        .fill(Color.secondary.opacity(0.1))
+                        .overlay(
+                            Image(systemName: "music.note")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.secondary.opacity(0.3))
+                        )
+                }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .cornerRadius(design.AlbumCard.cornerRadius)
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .task {
+                guard !album.coverArt.isEmpty else { return }
+                let id = album.coverArt
+                let data = try? await server.getCoverArt(id: id)
+                guard let data else { return }
+                image = try? await ImageCacheManager.shared.image(for: id, data: data)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(album.name)
+                    .font(design.AlbumCard.titleFont)
+                    .lineLimit(design.AlbumCard.titleLineLimit)
+                    .foregroundStyle(.primary)
+                Text(album.artist)
+                    .font(design.AlbumCard.artistFont)
+                    .foregroundColor(design.AlbumCard.artistColor)
+                    .lineLimit(design.AlbumCard.artistLineLimit)
+            }
+        }
     }
 }
 

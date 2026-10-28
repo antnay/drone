@@ -67,6 +67,35 @@ final class Song: Identifiable, Codable {
         self.discNumber = discNumber
     }
 
+    /// Builds a `Song` from a decoded Subsonic `SongResponse`, filling in
+    /// sensible defaults for any fields the server omits.
+    convenience init(response s: SongResponse) {
+        self.init(
+            songID: s.id,
+            parent: s.parent ?? "",
+            title: s.title,
+            album: s.album ?? "",
+            artist: s.artist,
+            isDir: s.isDir,
+            coverArt: s.coverArt ?? "",
+            created: s.created ?? "",
+            duration: s.duration ?? 0,
+            bitRate: s.bitRate ?? 0,
+            track: s.track ?? 0,
+            year: s.year ?? 0,
+            genre: s.genre ?? "",
+            size: s.size ?? 0,
+            suffix: s.suffix ?? "",
+            contentType: s.contentType ?? "",
+            isVideo: s.isVideo ?? false,
+            path: s.path ?? "",
+            albumId: s.albumId ?? "",
+            artistId: s.artistId ?? "",
+            type: s.type ?? "",
+            discNumber: s.discNumber ?? 0
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case songID

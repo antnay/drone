@@ -9,7 +9,6 @@ struct PlayerView: View {
     @State private var image: NSImage?
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
-    @State private var showQueue = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -191,16 +190,21 @@ struct PlayerView: View {
             .frame(width: 88)
             .controlSize(.small)
 
-            Button(action: { showQueue.toggle() }) {
+            // A bit more breathing room between the volume control and the
+            // queue toggle so they don't read as one cluster.
+            Spacer().frame(width: 10)
+
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    player.showQueueSidebar.toggle()
+                }
+            }) {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 14))
-                    .foregroundStyle(showQueue ? Color.accentColor : .primary)
+                    .foregroundStyle(player.showQueueSidebar ? Color.accentColor : .primary)
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $showQueue, arrowEdge: .top) {
-                QueuePopover()
-                    .environmentObject(player)
-            }
+            .help("Playing Next")
         }
     }
 
@@ -223,97 +227,5 @@ struct PlayerView: View {
             return "\(m / 60):\(String(format: "%02d", m % 60)):\(String(format: "%02d", s % 60))"
         }
         return "\(m):\(String(format: "%02d", s % 60))"
-    }
-}
-
-// MARK: - Queue Popover
-
-struct QueuePopover: View {
-    @EnvironmentObject var player: APlayer
-    @State private var hoveredIndex: Int? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Queue")
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-
-            Divider()
-
-            if player.queue.isEmpty {
-                Text("No songs in queue")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 32)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(player.queue.enumerated()), id: \.offset) { index, song in
-                                queueRow(song: song, index: index)
-                                    .id(index)
-                            }
-                        }
-                    }
-                    .frame(height: 340)
-                    .onAppear {
-                        let target = max(0, player.curIndex - 2)
-                        proxy.scrollTo(target, anchor: .top)
-                    }
-                    .onChange(of: player.curIndex) { _, i in
-                        withAnimation { proxy.scrollTo(max(0, i - 2), anchor: .top) }
-                    }
-                }
-            }
-        }
-        .frame(width: 300)
-    }
-
-    private func queueRow(song: Song, index: Int) -> some View {
-        let isCurrent = index == player.curIndex
-        let isHovered = hoveredIndex == index
-        return Button(action: { player.jumpTo(index: index) }) {
-            HStack(spacing: 10) {
-                if isCurrent {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.accent)
-                        .frame(width: 16)
-                        .symbolEffect(.variableColor.iterative, isActive: player.isPlaying)
-                } else {
-                    Spacer().frame(width: 16)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title)
-                        .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
-                        .foregroundStyle(isCurrent ? Color.accentColor : .primary)
-                        .lineLimit(1)
-                    Text(song.artist)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Button(action: { player.removeFromQueue(at: index) }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovered ? 1 : 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(isCurrent ? Color.accentColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.05) : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hoveredIndex = $0 ? index : nil }
     }
 }

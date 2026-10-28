@@ -96,7 +96,7 @@ final class Artist: Identifiable, Codable {
         artistImageUrl: String, musicBrainzId: String, sortName: String,
 //        roles: [String]
     ) {
-        self.id = UUID().uuidString
+        self.id = artistID
         self.artistID = artistID
         self.name = name
         self.coverArt = coverArt

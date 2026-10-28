@@ -124,7 +124,7 @@ struct AlbumListResponse: Codable, Identifiable {
     let displayArtist: String?
     let albumArtists: [ArtistInfo]?
     let displayAlbumArtist: String?
-    let contributors: [String]?
+    let contributors: [Contributor]?
     let displayComposer: String?
     let explicitStatus: String?
 
@@ -183,14 +183,60 @@ struct SongResponse: Codable, Identifiable {
 }
 
 struct SearchResult3: Codable {
+    let artist: [ArtistInfo]
+    let album: [AlbumListResponse]
     let song: [SongResponse]
 
-    init(song: [SongResponse] = []) {
+    enum CodingKeys: String, CodingKey {
+        case artist, album, song
+    }
+
+    init(
+        artist: [ArtistInfo] = [],
+        album: [AlbumListResponse] = [],
+        song: [SongResponse] = []
+    ) {
+        self.artist = artist
+        self.album = album
         self.song = song
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // SubsonicResponse resolves its payload by trying to decode each unknown
+        // top-level key into T and taking the first that succeeds; without a
+        // guard an unrelated non-empty object could decode into an all-empty
+        // SearchResult3 and win over the real `searchResult3` key. Reject
+        // objects that carry keys but none of ours (a genuinely empty
+        // `searchResult3: {}` has no keys and is still accepted as "no results").
+        let keys: Set<String> = Set(container.allKeys.map { $0.stringValue })
+        if !keys.isEmpty, keys.isDisjoint(with: ["artist", "album", "song"]) {
+            throw DecodingError.keyNotFound(
+                CodingKeys.song,
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "Not a searchResult3 payload"
+                )
+            )
+        }
+        self.artist =
+            try container.decodeIfPresent([ArtistInfo].self, forKey: .artist)
+            ?? []
+        self.album =
+            try container.decodeIfPresent([AlbumListResponse].self, forKey: .album)
+            ?? []
+        self.song =
+            try container.decodeIfPresent([SongResponse].self, forKey: .song)
+            ?? []
     }
 }
 
 struct ReplayGain: Codable {
+}
+
+struct Contributor: Codable {
+    let role: String?
+    let artist: ArtistInfo?
 }
 
 struct ArtistInfo: Codable, Identifiable {

@@ -63,9 +63,10 @@ final class Server: ObservableObject {
     }
 
     private func salter() -> String {
-        let letters =
+        let letters = Array(
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return String((0..<15).map { _ in letters.randomElement()! })
+        )
+        return String((0..<15).map { _ in letters.randomElement() ?? "a" })
     }
 
     private func md5(from string: String) -> String {
@@ -139,14 +140,27 @@ final class Server: ObservableObject {
         let token = md5(from: "\(password)\(salt)")
         var components = URLComponents(string: baseURL)
         components?.path = "/rest/stream"
-        components?.queryItems = [
+
+        // User-selectable streaming quality. Default is raw/unlimited, so audio
+        // stays lossless (protecting the EQ's source) until the user opts into
+        // transcoding in Settings → Playback.
+        let streaming = StreamingSettingsStore.load()
+        var items = [
             URLQueryItem(name: "id", value: songID),
             URLQueryItem(name: "u", value: username),
             URLQueryItem(name: "t", value: token),
             URLQueryItem(name: "s", value: salt),
             URLQueryItem(name: "v", value: version),
             URLQueryItem(name: "c", value: client),
+            URLQueryItem(name: "format", value: streaming.format),
         ]
+        // maxBitRate only has effect when transcoding; omit it for raw.
+        if streaming.bitRateApplies, streaming.maxBitRate > 0 {
+            items.append(
+                URLQueryItem(name: "maxBitRate", value: "\(streaming.maxBitRate)")
+            )
+        }
+        components?.queryItems = items
         return components?.url
     }
     
@@ -235,6 +249,23 @@ final class Server: ObservableObject {
                 URLQueryItem(name: "albumCount", value: "0"),
                 URLQueryItem(name: "songCount", value: songCount.description),
                 URLQueryItem(name: "songOffset", value: songOffset.description),
+            ]
+        ) ?? SearchResult3()
+    }
+
+    // Songs are not persisted locally, so song search goes to the server.
+    // Artists and albums are searched locally against SwiftData, so their
+    // counts are intentionally 0 here (SearchResult3 still decodes them if a
+    // caller later raises these counts).
+    func search3(query: String, songCount: Int = 25) async throws -> SearchResult3 {
+        return try await apiCall(
+            endpoint: "search3",
+            params: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "artistCount", value: "0"),
+                URLQueryItem(name: "albumCount", value: "0"),
+                URLQueryItem(name: "songCount", value: songCount.description),
+                URLQueryItem(name: "songOffset", value: "0"),
             ]
         ) ?? SearchResult3()
     }

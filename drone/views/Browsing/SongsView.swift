@@ -37,7 +37,9 @@ struct SongsView: View {
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                        ForEach(Array(songs.enumerated()), id: \.element.id) {
+                            index,
+                            song in
                             songRow(song: song, index: index)
                                 .onAppear {
                                     if song.id == songs.last?.id {
@@ -90,6 +92,7 @@ struct SongsView: View {
 
     private var columnHeader: some View {
         HStack(spacing: 0) {
+            Spacer().frame(width: 20)
             Text("Title")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Artist")
@@ -108,11 +111,36 @@ struct SongsView: View {
 
     private func songRow(song: Song, index: Int) -> some View {
         let isHovered = hoveredSongID == song.songID
-        return Button(action: { player.playAlbum(songs: songs, startingAt: index) }) {
+        let isCurrent = song.songID == player.current?.songID
+        return Button(action: {
+            player.playAlbum(songs: songs, startingAt: index)
+        }) {
             HStack(spacing: 0) {
+                // Now-playing indicator: a waveform animates on the current
+                // track (so it's distinguishable from a merely-hovered row),
+                // a play glyph previews on hover, otherwise nothing.
+                ZStack {
+                    if isCurrent {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.accent)
+                            .symbolEffect(
+                                .variableColor.iterative,
+                                isActive: player.isPlaying
+                            )
+                    } else if isHovered {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.accent)
+                    }
+                }
+                .frame(width: 20, alignment: .leading)
+
                 Text(song.title)
-                    .font(.system(size: 13))
-                    .foregroundStyle(isHovered ? Color.accentColor : .primary)
+                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                    .foregroundStyle(
+                        (isCurrent || isHovered) ? Color.accentColor : .primary
+                    )
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -146,7 +174,11 @@ struct SongsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(isHovered ? Color.primary.opacity(0.05) : .clear)
+        .background(
+            isCurrent
+                ? Color.accentColor.opacity(0.08)
+                : (isHovered ? Color.primary.opacity(0.05) : .clear)
+        )
         .songContextMenu(song: song)
         .onHover { hovering in
             hoveredSongID = hovering ? song.songID : nil
@@ -167,32 +199,7 @@ struct SongsView: View {
                     songCount: pageSize,
                     songOffset: offset
                 )
-                let newSongs = results.song.map { s in
-                    Song(
-                        songID: s.id,
-                        parent: s.parent ?? "",
-                        title: s.title,
-                        album: s.album ?? "",
-                        artist: s.artist,
-                        isDir: s.isDir,
-                        coverArt: s.coverArt ?? "",
-                        created: s.created ?? "",
-                        duration: s.duration ?? 0,
-                        bitRate: s.bitRate ?? 0,
-                        track: s.track ?? 0,
-                        year: s.year ?? 0,
-                        genre: s.genre ?? "",
-                        size: s.size ?? 0,
-                        suffix: s.suffix ?? "",
-                        contentType: s.contentType ?? "",
-                        isVideo: s.isVideo ?? false,
-                        path: s.path ?? "",
-                        albumId: s.albumId ?? "",
-                        artistId: s.artistId ?? "",
-                        type: s.type ?? "",
-                        discNumber: s.discNumber ?? 0
-                    )
-                }
+                let newSongs = results.song.map(Song.init(response:))
                 await MainActor.run {
                     songs.append(contentsOf: newSongs)
                     hasMore = newSongs.count == pageSize
@@ -201,7 +208,9 @@ struct SongsView: View {
                 }
             } catch {
                 await MainActor.run {
-                    Server.logger.error("Failed to load songs: \(error.localizedDescription)")
+                    Server.logger.error(
+                        "Failed to load songs: \(error.localizedDescription)"
+                    )
                     isLoading = false
                 }
             }

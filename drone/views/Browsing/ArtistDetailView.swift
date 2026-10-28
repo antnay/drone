@@ -11,8 +11,14 @@ struct ArtistDetailView: View {
     init(artist: Artist) {
         self.artist = artist
         let id = artist.artistID
+        let name = artist.name
+        // Match on the stable artist id, but fall back to the artist name for
+        // albums whose getAlbumList entry omitted artistId (common with the
+        // non-ID3 endpoints), which would otherwise never match any artist.
         _albums = Query(
-            filter: #Predicate<Album> { $0.artistId == id },
+            filter: #Predicate<Album> {
+                $0.artistId == id || ($0.artistId == "" && $0.artist == name)
+            },
             sort: [SortDescriptor(\.year, order: .reverse)]
         )
     }
@@ -90,7 +96,11 @@ struct ArtistDetailView: View {
             if albums.isEmpty {
                 Text("No albums in library")
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: 120,
+                        alignment: .center
+                    )
             } else {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 160), spacing: 16)],
@@ -110,7 +120,9 @@ struct ArtistDetailView: View {
         Task {
             var songs: [Song] = []
             for album in albums.sorted(by: { $0.year < $1.year }) {
-                let response = try? await server.getAlbum(albumId: album.albumId)
+                let response = try? await server.getAlbum(
+                    albumId: album.albumId
+                )
                 songs.append(contentsOf: response?.song.map(\.toSong) ?? [])
             }
             guard !songs.isEmpty else { return }
@@ -122,7 +134,9 @@ struct ArtistDetailView: View {
         Task {
             var songs: [Song] = []
             for album in albums {
-                let response = try? await server.getAlbum(albumId: album.albumId)
+                let response = try? await server.getAlbum(
+                    albumId: album.albumId
+                )
                 songs.append(contentsOf: response?.song.map(\.toSong) ?? [])
             }
             guard !songs.isEmpty else { return }
